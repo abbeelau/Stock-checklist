@@ -222,6 +222,17 @@ def calculate_fundamental_scores(fund_data):
     balance = fund_data['balance']
     info = fund_data['info']
     
+    # Get quarter dates
+    quarter_dates = []
+    if hasattr(income, 'columns'):
+        for col in income.columns[:4]:
+            try:
+                quarter_dates.append(col.strftime('%b-%Y'))
+            except:
+                quarter_dates.append(str(col))
+    
+    details['quarter_dates'] = quarter_dates
+    
     # 1. Sales Growth Acceleration
     try:
         if 'Total Revenue' in income.index:
@@ -611,19 +622,23 @@ if analyze_button or ticker:
             if 'sales' in fund_details and 'sales_growth' in fund_details:
                 revenue_data = fund_details['sales']
                 growth_data = fund_details['sales_growth']
+                quarter_dates = fund_details.get('quarter_dates', [])
                 
-                st.write("**Last 4 Quarters:**")
+                st.write("**Last 4 Quarters (Newest to Oldest):**")
                 for i in range(len(revenue_data)):
+                    quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
                     if i < len(growth_data) and growth_data[i] is not None:
-                        st.write(f"Q{i+1}: ${revenue_data[i]:,.0f} (Growth: {growth_data[i]:.2f}%)")
+                        st.write(f"{quarter_label}: ${revenue_data[i]:,.0f} (Growth: {growth_data[i]:.2f}%)")
                     else:
-                        st.write(f"Q{i+1}: ${revenue_data[i]:,.0f}")
+                        st.write(f"{quarter_label}: ${revenue_data[i]:,.0f}")
                 
                 if len(growth_data) >= 2 and growth_data[0] is not None and growth_data[1] is not None:
+                    latest_q = quarter_dates[0] if len(quarter_dates) > 0 else "Latest"
+                    prev_q = quarter_dates[1] if len(quarter_dates) > 1 else "Previous"
                     if growth_data[0] > growth_data[1]:
-                        st.success(f"✅ Accelerating: {growth_data[0]:.2f}% > {growth_data[1]:.2f}%")
+                        st.success(f"✅ Accelerating: {latest_q} ({growth_data[0]:.2f}%) > {prev_q} ({growth_data[1]:.2f}%)")
                     else:
-                        st.warning(f"❌ Not Accelerating: {growth_data[0]:.2f}% ≤ {growth_data[1]:.2f}%")
+                        st.warning(f"❌ Not Accelerating: {latest_q} ({growth_data[0]:.2f}%) ≤ {prev_q} ({growth_data[1]:.2f}%)")
             else:
                 st.write("Data not available")
         
@@ -649,18 +664,23 @@ if analyze_button or ticker:
         with col1:
             if 'margin' in fund_details:
                 margin_data = fund_details['margin']
-                st.write("**Last 4 Quarters Margin %:**")
+                quarter_dates = fund_details.get('quarter_dates', [])
+                
+                st.write("**Last 4 Quarters Margin % (Newest to Oldest):**")
                 for i, val in enumerate(margin_data):
+                    quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
                     if val is not None:
-                        st.write(f"Q{i+1}: {val:.2f}%")
+                        st.write(f"{quarter_label}: {val:.2f}%")
                     else:
-                        st.write(f"Q{i+1}: N/A")
+                        st.write(f"{quarter_label}: N/A")
                 
                 if len(margin_data) >= 2 and margin_data[0] is not None and margin_data[1] is not None:
+                    latest_q = quarter_dates[0] if len(quarter_dates) > 0 else "Latest"
+                    prev_q = quarter_dates[1] if len(quarter_dates) > 1 else "Previous"
                     if margin_data[0] > margin_data[1]:
-                        st.success(f"✅ Improving: {margin_data[0]:.2f}% > {margin_data[1]:.2f}%")
+                        st.success(f"✅ Improving: {latest_q} ({margin_data[0]:.2f}%) > {prev_q} ({margin_data[1]:.2f}%)")
                     else:
-                        st.warning(f"❌ Not Improving: {margin_data[0]:.2f}% ≤ {margin_data[1]:.2f}%")
+                        st.warning(f"❌ Not Improving: {latest_q} ({margin_data[0]:.2f}%) ≤ {prev_q} ({margin_data[1]:.2f}%)")
             else:
                 st.write("Data not available")
         
@@ -687,19 +707,23 @@ if analyze_button or ticker:
             if 'earnings' in fund_details and 'earnings_growth' in fund_details:
                 earnings_data = fund_details['earnings']
                 growth_data = fund_details['earnings_growth']
+                quarter_dates = fund_details.get('quarter_dates', [])
                 
-                st.write("**Last 4 Quarters:**")
+                st.write("**Last 4 Quarters (Newest to Oldest):**")
                 for i in range(len(earnings_data)):
+                    quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
                     if i < len(growth_data) and growth_data[i] is not None:
-                        st.write(f"Q{i+1}: ${earnings_data[i]:,.0f} (Growth: {growth_data[i]:.2f}%)")
+                        st.write(f"{quarter_label}: ${earnings_data[i]:,.0f} (Growth: {growth_data[i]:.2f}%)")
                     else:
-                        st.write(f"Q{i+1}: ${earnings_data[i]:,.0f}")
+                        st.write(f"{quarter_label}: ${earnings_data[i]:,.0f}")
                 
                 if len(growth_data) >= 2 and growth_data[0] is not None and growth_data[1] is not None:
+                    latest_q = quarter_dates[0] if len(quarter_dates) > 0 else "Latest"
+                    prev_q = quarter_dates[1] if len(quarter_dates) > 1 else "Previous"
                     if growth_data[0] > growth_data[1]:
-                        st.success(f"✅ Accelerating: {growth_data[0]:.2f}% > {growth_data[1]:.2f}%")
+                        st.success(f"✅ Accelerating: {latest_q} ({growth_data[0]:.2f}%) > {prev_q} ({growth_data[1]:.2f}%)")
                     else:
-                        st.warning(f"❌ Not Accelerating: {growth_data[0]:.2f}% ≤ {growth_data[1]:.2f}%")
+                        st.warning(f"❌ Not Accelerating: {latest_q} ({growth_data[0]:.2f}%) ≤ {prev_q} ({growth_data[1]:.2f}%)")
             else:
                 st.write("Data not available")
         
@@ -762,18 +786,22 @@ if analyze_button or ticker:
         with col1:
             if 'roe_quarters' in fund_details:
                 roe_data = fund_details['roe_quarters']
-                st.write("**Return on Equity:**")
+                quarter_dates = fund_details.get('quarter_dates', [])
+                
+                st.write("**Return on Equity (Newest to Oldest):**")
                 for i, val in enumerate(roe_data):
+                    quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
                     if val is not None:
-                        st.write(f"Q{i+1}: {val:.2f}%")
+                        st.write(f"{quarter_label}: {val:.2f}%")
                     else:
-                        st.write(f"Q{i+1}: N/A")
+                        st.write(f"{quarter_label}: N/A")
                 
                 if roe_data[0] is not None:
+                    latest_q = quarter_dates[0] if len(quarter_dates) > 0 else "Latest"
                     if roe_data[0] >= 17:
-                        st.success(f"✅ Passed: {roe_data[0]:.2f}% ≥ 17%")
+                        st.success(f"✅ Passed: {latest_q} ({roe_data[0]:.2f}%) ≥ 17%")
                     else:
-                        st.warning(f"❌ Failed: {roe_data[0]:.2f}% < 17%")
+                        st.warning(f"❌ Failed: {latest_q} ({roe_data[0]:.2f}%) < 17%")
             elif 'roe' in fund_details:
                 roe_val = fund_details['roe']
                 st.write(f"**ROE (TTM): {roe_val:.2f}%**")
