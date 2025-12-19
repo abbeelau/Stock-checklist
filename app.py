@@ -182,22 +182,46 @@ def calculate_growth_rate(current, previous):
     return ((current - previous) / abs(previous)) * 100
 
 def check_growth_acceleration(values):
-    """Check if latest growth rate > previous growth rate
+    """Check if latest YoY growth rate > previous YoY growth rate
+    YoY = comparing same quarter year-over-year (e.g., Q3-2024 vs Q3-2023)
     Returns: (is_accelerating, growth_rates_list)
     """
-    if values is None or len(values) < 3:
+    if values is None or len(values) < 5:  # Need at least 5 quarters for 2 YoY comparisons
         return False, []
     
-    # Calculate growth rates (newer to older)
+    # Calculate YoY growth rates
+    # values[0] is most recent quarter, values[4] is 4 quarters ago (1 year)
     growth_rates = []
-    for i in range(len(values) - 1):
-        if values[i+1] != 0 and not pd.isna(values[i]) and not pd.isna(values[i+1]):
-            growth = ((values[i] - values[i+1]) / abs(values[i+1])) * 100
-            growth_rates.append(growth)
-        else:
-            growth_rates.append(None)
     
-    # Check if latest growth > previous growth
+    # Latest YoY: Q0 vs Q4 (most recent vs 1 year ago)
+    if len(values) > 4 and values[4] != 0 and not pd.isna(values[0]) and not pd.isna(values[4]):
+        yoy_growth = ((values[0] - values[4]) / abs(values[4])) * 100
+        growth_rates.append(yoy_growth)
+    else:
+        growth_rates.append(None)
+    
+    # Previous YoY: Q1 vs Q5 (previous quarter vs its year-ago comparison)
+    if len(values) > 5 and values[5] != 0 and not pd.isna(values[1]) and not pd.isna(values[5]):
+        yoy_growth = ((values[1] - values[5]) / abs(values[5])) * 100
+        growth_rates.append(yoy_growth)
+    else:
+        growth_rates.append(None)
+    
+    # 2 quarters ago YoY: Q2 vs Q6
+    if len(values) > 6 and values[6] != 0 and not pd.isna(values[2]) and not pd.isna(values[6]):
+        yoy_growth = ((values[2] - values[6]) / abs(values[6])) * 100
+        growth_rates.append(yoy_growth)
+    else:
+        growth_rates.append(None)
+    
+    # 3 quarters ago YoY: Q3 vs Q7
+    if len(values) > 7 and values[7] != 0 and not pd.isna(values[3]) and not pd.isna(values[7]):
+        yoy_growth = ((values[3] - values[7]) / abs(values[7])) * 100
+        growth_rates.append(yoy_growth)
+    else:
+        growth_rates.append(None)
+    
+    # Check if latest YoY growth > previous YoY growth
     if len(growth_rates) >= 2 and growth_rates[0] is not None and growth_rates[1] is not None:
         return growth_rates[0] > growth_rates[1], growth_rates
     
@@ -222,7 +246,7 @@ def calculate_fundamental_scores(fund_data):
     balance = fund_data['balance']
     info = fund_data['info']
     
-    # Get quarter dates
+    # Get quarter dates (show first 4 for display)
     quarter_dates = []
     if hasattr(income, 'columns'):
         for col in income.columns[:4]:
@@ -233,17 +257,17 @@ def calculate_fundamental_scores(fund_data):
     
     details['quarter_dates'] = quarter_dates
     
-    # 1. Sales Growth Acceleration
+    # 1. Sales Growth Acceleration (YoY)
     try:
         if 'Total Revenue' in income.index:
-            revenue = income.loc['Total Revenue'].values[:4]  # Latest 4 quarters
+            revenue = income.loc['Total Revenue'].values[:8]  # Need 8 quarters for YoY
             is_accelerating, growth_rates = check_growth_acceleration(revenue)
             
             if is_accelerating:
                 scores['sales_growth'] = 1
             
-            details['sales'] = revenue
-            details['sales_growth'] = growth_rates
+            details['sales'] = revenue[:4]  # Only show first 4 quarters
+            details['sales_growth'] = growth_rates[:4]  # Show 4 YoY growth rates
     except:
         pass
     
@@ -270,17 +294,17 @@ def calculate_fundamental_scores(fund_data):
     except:
         pass
     
-    # 3. Earnings Growth Acceleration (using Net Income)
+    # 3. Earnings Growth Acceleration (YoY using Net Income)
     try:
         if 'Net Income' in income.index:
-            earnings = income.loc['Net Income'].values[:4]
+            earnings = income.loc['Net Income'].values[:8]  # Need 8 quarters for YoY
             is_accelerating, growth_rates = check_growth_acceleration(earnings)
             
             if is_accelerating:
                 scores['earnings'] = 1
             
-            details['earnings'] = earnings
-            details['earnings_growth'] = growth_rates
+            details['earnings'] = earnings[:4]  # Only show first 4 quarters
+            details['earnings_growth'] = growth_rates[:4]  # Show 4 YoY growth rates
     except:
         pass
     
@@ -612,9 +636,11 @@ if analyze_button or ticker:
         with col1:
             with st.popover("ℹ️ Scoring Criteria"):
                 st.markdown("""
-                **Score 1 if:** Latest quarter sales growth % > Previous quarter sales growth %
+                **Score 1 if:** Latest quarter YoY sales growth % > Previous quarter YoY sales growth %
                 
-                Shows last 4 quarters of revenue and calculated growth rates.
+                **YoY (Year-over-Year):** Compares same quarter across years (e.g., Q3-2024 vs Q3-2023)
+                
+                Shows last 4 quarters of revenue with their YoY growth rates.
                 """)
         
         col1, col2 = st.columns([3, 1])
@@ -628,7 +654,7 @@ if analyze_button or ticker:
                 for i in range(len(revenue_data)):
                     quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
                     if i < len(growth_data) and growth_data[i] is not None:
-                        st.write(f"{quarter_label}: ${revenue_data[i]:,.0f} (Growth: {growth_data[i]:.2f}%)")
+                        st.write(f"{quarter_label}: ${revenue_data[i]:,.0f} (YoY Growth: {growth_data[i]:.2f}%)")
                     else:
                         st.write(f"{quarter_label}: ${revenue_data[i]:,.0f}")
                 
@@ -697,9 +723,11 @@ if analyze_button or ticker:
         with col1:
             with st.popover("ℹ️ Scoring Criteria"):
                 st.markdown("""
-                **Score 1 if:** Latest quarter earnings growth % > Previous quarter earnings growth %
+                **Score 1 if:** Latest quarter YoY earnings growth % > Previous quarter YoY earnings growth %
                 
-                Uses Net Income to calculate growth rates.
+                **YoY (Year-over-Year):** Compares same quarter across years (e.g., Q3-2024 vs Q3-2023)
+                
+                Uses Net Income to calculate YoY growth rates.
                 """)
         
         col1, col2 = st.columns([3, 1])
@@ -713,7 +741,7 @@ if analyze_button or ticker:
                 for i in range(len(earnings_data)):
                     quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
                     if i < len(growth_data) and growth_data[i] is not None:
-                        st.write(f"{quarter_label}: ${earnings_data[i]:,.0f} (Growth: {growth_data[i]:.2f}%)")
+                        st.write(f"{quarter_label}: ${earnings_data[i]:,.0f} (YoY Growth: {growth_data[i]:.2f}%)")
                     else:
                         st.write(f"{quarter_label}: ${earnings_data[i]:,.0f}")
                 
