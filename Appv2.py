@@ -96,8 +96,18 @@ def fetch_fmp_data(ticker, api_key):
         
         income_response = requests.get(income_url, params=income_params, timeout=10)
         
+        # Better error reporting
+        if income_response.status_code == 403:
+            error_text = income_response.text
+            if "API rate limit" in error_text or "limit exceeded" in error_text.lower():
+                return None, None, f"FMP API rate limit exceeded. Try again tomorrow or upgrade plan."
+            elif "Invalid API KEY" in error_text or "invalid" in error_text.lower():
+                return None, None, f"Invalid API key. Please check your key at financialmodelingprep.com"
+            else:
+                return None, None, f"FMP API 403 error: {error_text[:100]}"
+        
         if income_response.status_code != 200:
-            return None, None, f"FMP API error: {income_response.status_code}"
+            return None, None, f"FMP API error {income_response.status_code}: {income_response.text[:100]}"
         
         income_data = income_response.json()
         
