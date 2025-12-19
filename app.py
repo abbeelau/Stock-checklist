@@ -651,20 +651,26 @@ if analyze_button or ticker:
                 quarter_dates = fund_details.get('quarter_dates', [])
                 
                 st.write("**Last 4 Quarters (Newest to Oldest):**")
-                for i in range(len(revenue_data)):
-                    quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
-                    if i < len(growth_data) and growth_data[i] is not None:
-                        st.write(f"{quarter_label}: ${revenue_data[i]:,.0f} (YoY Growth: {growth_data[i]:.2f}%)")
-                    else:
-                        st.write(f"{quarter_label}: ${revenue_data[i]:,.0f}")
                 
+                # Display all quarters with their YoY growth
+                for i in range(min(len(revenue_data), 4)):
+                    quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
+                    revenue_str = f"${revenue_data[i]:,.0f}"
+                    
+                    # Show YoY growth if available
+                    if i < len(growth_data) and growth_data[i] is not None:
+                        st.write(f"{quarter_label}: {revenue_str} **(YoY: {growth_data[i]:+.2f}%)**")
+                    else:
+                        st.write(f"{quarter_label}: {revenue_str} (YoY: N/A)")
+                
+                # Show acceleration comparison
                 if len(growth_data) >= 2 and growth_data[0] is not None and growth_data[1] is not None:
                     latest_q = quarter_dates[0] if len(quarter_dates) > 0 else "Latest"
                     prev_q = quarter_dates[1] if len(quarter_dates) > 1 else "Previous"
                     if growth_data[0] > growth_data[1]:
-                        st.success(f"✅ Accelerating: {latest_q} ({growth_data[0]:.2f}%) > {prev_q} ({growth_data[1]:.2f}%)")
+                        st.success(f"✅ **Accelerating:** {latest_q} YoY ({growth_data[0]:+.2f}%) > {prev_q} YoY ({growth_data[1]:+.2f}%)")
                     else:
-                        st.warning(f"❌ Not Accelerating: {latest_q} ({growth_data[0]:.2f}%) ≤ {prev_q} ({growth_data[1]:.2f}%)")
+                        st.warning(f"❌ **Not Accelerating:** {latest_q} YoY ({growth_data[0]:+.2f}%) ≤ {prev_q} YoY ({growth_data[1]:+.2f}%)")
             else:
                 st.write("Data not available")
         
@@ -738,20 +744,26 @@ if analyze_button or ticker:
                 quarter_dates = fund_details.get('quarter_dates', [])
                 
                 st.write("**Last 4 Quarters (Newest to Oldest):**")
-                for i in range(len(earnings_data)):
-                    quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
-                    if i < len(growth_data) and growth_data[i] is not None:
-                        st.write(f"{quarter_label}: ${earnings_data[i]:,.0f} (YoY Growth: {growth_data[i]:.2f}%)")
-                    else:
-                        st.write(f"{quarter_label}: ${earnings_data[i]:,.0f}")
                 
+                # Display all quarters with their YoY growth
+                for i in range(min(len(earnings_data), 4)):
+                    quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
+                    earnings_str = f"${earnings_data[i]:,.0f}"
+                    
+                    # Show YoY growth if available
+                    if i < len(growth_data) and growth_data[i] is not None:
+                        st.write(f"{quarter_label}: {earnings_str} **(YoY: {growth_data[i]:+.2f}%)**")
+                    else:
+                        st.write(f"{quarter_label}: {earnings_str} (YoY: N/A)")
+                
+                # Show acceleration comparison
                 if len(growth_data) >= 2 and growth_data[0] is not None and growth_data[1] is not None:
                     latest_q = quarter_dates[0] if len(quarter_dates) > 0 else "Latest"
                     prev_q = quarter_dates[1] if len(quarter_dates) > 1 else "Previous"
                     if growth_data[0] > growth_data[1]:
-                        st.success(f"✅ Accelerating: {latest_q} ({growth_data[0]:.2f}%) > {prev_q} ({growth_data[1]:.2f}%)")
+                        st.success(f"✅ **Accelerating:** {latest_q} YoY ({growth_data[0]:+.2f}%) > {prev_q} YoY ({growth_data[1]:+.2f}%)")
                     else:
-                        st.warning(f"❌ Not Accelerating: {latest_q} ({growth_data[0]:.2f}%) ≤ {prev_q} ({growth_data[1]:.2f}%)")
+                        st.warning(f"❌ **Not Accelerating:** {latest_q} YoY ({growth_data[0]:+.2f}%) ≤ {prev_q} YoY ({growth_data[1]:+.2f}%)")
             else:
                 st.write("Data not available")
         
