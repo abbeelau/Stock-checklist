@@ -76,6 +76,8 @@ if 'market_pulse' not in st.session_state:
 if 'alpha_vantage_key' not in st.session_state:
     # Pre-filled with user's API key
     st.session_state.alpha_vantage_key = saved_inputs.get('alpha_vantage_key', '0Y0YAGE5H1Y7OLLU')
+if 'av_calls_today' not in st.session_state:
+    st.session_state.av_calls_today = 0
 
 # ==================== ALPHA VANTAGE API FUNCTIONS (v3.0) ====================
 
@@ -678,6 +680,22 @@ with st.sidebar:
         st.success("✅ Using Alpha Vantage API")
         st.caption("2 API calls per stock | 12-13 stocks/day")
         st.caption("✓ Guaranteed 8+ quarters | ✓ Full YoY data")
+        
+        # Add usage tracking info
+        with st.expander("📊 API Usage Tracking"):
+            st.markdown("""
+            **How to check remaining calls:**
+            1. Visit: [Alpha Vantage Dashboard](https://www.alphavantage.co/support/#api-key)
+            2. Enter your email to get usage stats
+            3. Resets daily at midnight UTC
+            
+            **Daily Limit:**
+            - Free tier: 25 calls/day
+            - Per stock: 2 calls (Income + Balance Sheet)
+            - Total stocks: 12-13 per day
+            
+            **Current session:** If you see "rate limit exceeded" error, you've hit your limit for today.
+            """)
     else:
         st.warning("⚠️ Using Yahoo Finance (limited data)")
         st.caption("Some stocks may have incomplete YoY data")
@@ -698,14 +716,16 @@ if analyze_button or ticker:
         # Try Alpha Vantage first if API key is provided
         use_av = False
         if av_key and av_key.strip() != '':
-            st.info("📡 Fetching from Alpha Vantage API...")
-            av_income, av_balance, av_error = fetch_alpha_vantage_data(ticker, av_key)
+            with st.spinner('📡 Fetching from Alpha Vantage API...'):
+                av_income, av_balance, av_error = fetch_alpha_vantage_data(ticker, av_key)
             
             if not av_error and av_income:
                 use_av = True
-                st.success(f"✅ Using Alpha Vantage data ({len(av_income)} quarters available)")
+                # Increment call counter (2 calls: income + balance)
+                st.session_state.av_calls_today += 2
+                st.success(f"✅ Alpha Vantage: {len(av_income)} quarters | Session: {st.session_state.av_calls_today}/25 calls ({st.session_state.av_calls_today//2}/12 stocks)")
             else:
-                st.warning(f"⚠️ Alpha Vantage failed: {av_error}. Falling back to Yahoo Finance...")
+                st.warning(f"⚠️ Alpha Vantage failed: {av_error}. Using Yahoo Finance fallback...")
                 use_av = False
         
         # Fetch Yahoo Finance data (either as primary or fallback)
@@ -734,6 +754,13 @@ if analyze_button or ticker:
             st.metric("Company", info.get('shortName', ticker))
     except:
         pass
+    
+    # ==================== TOTAL SCORE DASHBOARD (MOVED TO TOP) ====================
+    st.markdown("---")
+    
+    # We'll calculate this after getting all scores, but reserve space here
+    # This will be populated later using st.empty()
+    total_score_placeholder = st.empty()
     
     st.markdown("---")
     
@@ -1206,19 +1233,153 @@ if analyze_button or ticker:
         st.markdown("---")
         st.markdown(f"### 📊 Fundamental Score: **{total_fund_score}/5.0**")
     
+    # ==================== REMARKS TAB (NEW) ====================
+    with st.expander("📝 **Remarks (Manual Assessment)** - Click to expand", expanded=False):
+        st.header("Remarks (Max: 2 points)")
+        st.caption("Manual assessment based on qualitative factors")
+        
+        remarks_scores = {}
+        
+        # Initialize session state for remarks
+        if 'top_rated_group' not in st.session_state:
+            st.session_state.top_rated_group = False
+        if 'new_development' not in st.session_state:
+            st.session_state.new_development = False
+        
+        # 1. Top-Rated Stocks in Group / Top Industry Group Rank
+        st.subheader("1️⃣ Among Top-Rated Stocks in Group or Top Industry Group Rank")
+        col1, col2 = st.columns([4, 1])
+        
+        with col1:
+            with st.popover("ℹ️ Assessment Criteria"):
+                st.markdown("""
+                **Score 1 if YES to either:**
+                - Stock is among top-rated stocks in its industry group
+                - Industry group has top rank relative to overall market
+                
+                **Consider:**
+                - Relative strength vs peers
+                - Industry group momentum
+                - Sector leadership
+                - Market cap rank in sector
+                """)
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            top_rated = st.radio(
+                "Is this stock among top-rated in its group OR is the industry group top-ranked?",
+                options=["No", "Yes"],
+                index=1 if st.session_state.top_rated_group else 0,
+                key="top_rated_radio",
+                horizontal=True
+            )
+            
+            if top_rated == "Yes":
+                st.success("✅ Top-rated stock or industry group")
+                remarks_scores['top_rated_group'] = 1
+                st.session_state.top_rated_group = True
+            else:
+                st.warning("❌ Not top-rated")
+                remarks_scores['top_rated_group'] = 0
+                st.session_state.top_rated_group = False
+        
+        with col2:
+            emoji = "🟢" if remarks_scores['top_rated_group'] == 1 else "🔴"
+            st.metric("Score", f"{remarks_scores['top_rated_group']}/1", delta=emoji)
+        
+        st.markdown("---")
+        
+        # 2. New Development
+        st.subheader("2️⃣ New Development (新產品/管理層、資產買賣、轉型、風口、業績前後）")
+        col1, col2 = st.columns([4, 1])
+        
+        with col1:
+            with st.popover("ℹ️ Assessment Criteria"):
+                st.markdown("""
+                **Score 1 if YES to any:**
+                - **新產品 (New Product):** Launched significant new product/service
+                - **管理層 (Management):** New leadership or major management changes
+                - **資產買賣 (M&A):** Major acquisition, divestiture, or asset transaction
+                - **轉型 (Transformation):** Business model transformation or pivot
+                - **風口 (Industry Trend):** Riding major industry trend or catalyst
+                - **業績前後 (Earnings Catalyst):** Pre/post major earnings announcement or guidance update
+                
+                **Examples:**
+                - AI transformation (like MSFT with OpenAI)
+                - New CEO announced (turnaround story)
+                - Major acquisition completed
+                - New product launch (iPhone, new chip)
+                - Regulatory approval received
+                """)
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            new_dev = st.radio(
+                "Any significant new development?",
+                options=["No", "Yes"],
+                index=1 if st.session_state.new_development else 0,
+                key="new_dev_radio",
+                horizontal=True
+            )
+            
+            # Text area for notes
+            dev_notes = st.text_area(
+                "Notes (optional):",
+                placeholder="Describe the new development (e.g., 'New AI product launch', 'New CEO appointed', 'Major acquisition announced')",
+                height=80
+            )
+            
+            if new_dev == "Yes":
+                st.success("✅ Has new development catalyst")
+                remarks_scores['new_development'] = 1
+                st.session_state.new_development = True
+            else:
+                st.warning("❌ No significant new development")
+                remarks_scores['new_development'] = 0
+                st.session_state.new_development = False
+        
+        with col2:
+            emoji = "🟢" if remarks_scores['new_development'] == 1 else "🔴"
+            st.metric("Score", f"{remarks_scores['new_development']}/1", delta=emoji)
+        
+        # Remarks Total Score
+        total_remarks_score = sum(remarks_scores.values())
+        st.markdown("---")
+        st.markdown(f"### 📊 Remarks Score: **{total_remarks_score}/2.0**")
+    
     # ==================== TOTAL SCORE ====================
     st.markdown("---")
     st.header("🎯 Total Score Summary")
     
-    total_score = total_tech_score + total_fund_score
-    max_score = 8.0
+    total_score = total_tech_score + total_fund_score + total_remarks_score
+    max_score = 10.0  # Updated from 8.0 to 10.0
     
-    col1, col2, col3 = st.columns(3)
+    # Update the top dashboard
+    with total_score_placeholder.container():
+        st.header("🎯 Overall Score Dashboard")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Technical", f"{total_tech_score:.1f}/3.0")
+        with col2:
+            st.metric("Fundamental", f"{total_fund_score}/5.0")
+        with col3:
+            st.metric("Remarks", f"{total_remarks_score}/2.0")
+        with col4:
+            percentage = (total_score / max_score) * 100
+            color = "🟢" if percentage >= 70 else ("🟡" if percentage >= 50 else "🔴")
+            st.metric("**TOTAL**", f"**{total_score:.1f}/{max_score}**", delta=f"{percentage:.0f}% {color}")
+    
+    # Bottom summary
+    col1, col2, col3, col4 = st.columns(4)
+    # Bottom summary
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Technical", f"{total_tech_score:.1f}/3.0")
     with col2:
         st.metric("Fundamental", f"{total_fund_score}/5.0")
     with col3:
+        st.metric("Remarks", f"{total_remarks_score}/2.0")
+    with col4:
         percentage = (total_score / max_score) * 100
         color = "🟢" if percentage >= 70 else ("🟡" if percentage >= 50 else "🔴")
         st.metric("TOTAL", f"{total_score:.1f}/{max_score}", delta=f"{percentage:.0f}% {color}")
