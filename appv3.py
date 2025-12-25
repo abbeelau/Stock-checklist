@@ -110,13 +110,20 @@ def fetch_alpha_vantage_data(ticker, api_key):
         
         income_json = income_response.json()
         
+        # Debug: Show what we got (can remove later)
+        # st.write("DEBUG - API Response keys:", list(income_json.keys()))
+        
         # Check for errors
         if "Error Message" in income_json:
             return None, None, f"Alpha Vantage error: {income_json['Error Message']}"
         elif "Note" in income_json:
             return None, None, f"Alpha Vantage rate limit: {income_json['Note']}"
+        elif "Information" in income_json:
+            return None, None, f"Alpha Vantage info: {income_json['Information']}"
         elif "quarterlyReports" not in income_json:
-            return None, None, "No quarterly data available from Alpha Vantage"
+            # Show what keys we actually got for debugging
+            error_msg = f"No quarterly data. API returned: {list(income_json.keys())[:5]}"
+            return None, None, error_msg
         
         income_data = income_json["quarterlyReports"]
         
@@ -765,7 +772,7 @@ if analyze_button or ticker:
     st.markdown("---")
     
     # ==================== TABS ====================
-    tab1, tab2 = st.tabs(["🔧 Technical Analysis", "💼 Fundamental Analysis"])
+    tab1, tab2, tab3 = st.tabs(["🔧 Technical Analysis", "💼 Fundamental Analysis", "📝 Remarks"])
     
     # ==================== TECHNICAL TAB ====================
     with tab1:
@@ -1233,8 +1240,8 @@ if analyze_button or ticker:
         st.markdown("---")
         st.markdown(f"### 📊 Fundamental Score: **{total_fund_score}/5.0**")
     
-    # ==================== REMARKS TAB (NEW) ====================
-    with st.expander("📝 **Remarks (Manual Assessment)** - Click to expand", expanded=False):
+    # ==================== REMARKS TAB (TAB 3) ====================
+    with tab3:
         st.header("Remarks (Max: 2 points)")
         st.caption("Manual assessment based on qualitative factors")
         
