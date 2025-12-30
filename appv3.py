@@ -955,20 +955,46 @@ if analyze_button or ticker:
                 yahoo_stock = yf.Ticker(ticker)
                 yahoo_info = yahoo_stock.info
                 
+                # Debug: Show what we got
+                st.write(f"DEBUG: info keys count = {len(yahoo_info)}")
+                
                 roe_ttm = yahoo_info.get('returnOnEquity')
+                st.write(f"DEBUG: returnOnEquity = {roe_ttm} (type: {type(roe_ttm)})")
+                
                 if roe_ttm is not None:
                     roe_pct = roe_ttm * 100 if roe_ttm < 1 else roe_ttm
                     fund_details['roe'] = roe_pct
                     fund_details['roe_source'] = 'Yahoo Finance (TTM)'
                     
+                    st.success(f"✅ ROE fetched: {roe_pct:.2f}%")
+                    
                     if roe_pct >= 17:
                         fund_scores['roe'] = 1
                 else:
-                    fund_details['roe'] = None
-                    fund_details['roe_source'] = 'Not available'
-            except:
+                    st.warning("⚠️ returnOnEquity field is None")
+                    
+                    # Try alternative fields
+                    alt_roe = (yahoo_info.get('returnOnEquityTTM') or 
+                              yahoo_info.get('roe') or 
+                              yahoo_info.get('ROE'))
+                    
+                    st.write(f"DEBUG: Trying alternative fields = {alt_roe}")
+                    
+                    if alt_roe:
+                        roe_pct = alt_roe * 100 if alt_roe < 1 else alt_roe
+                        fund_details['roe'] = roe_pct
+                        fund_details['roe_source'] = 'Yahoo Finance (TTM - alt field)'
+                        
+                        if roe_pct >= 17:
+                            fund_scores['roe'] = 1
+                    else:
+                        fund_details['roe'] = None
+                        fund_details['roe_source'] = 'Not available from Yahoo Finance'
+                        
+            except Exception as e:
+                st.error(f"❌ Error fetching ROE: {str(e)}")
                 fund_details['roe'] = None
-                fund_details['roe_source'] = 'Error fetching from Yahoo'
+                fund_details['roe_source'] = f'Error: {str(e)}'
                 
         else:
             if fund_error:
