@@ -89,19 +89,19 @@ if 'new_development' not in st.session_state:
 def fetch_alpha_vantage_data(ticker, api_key):
     """
     Fetch fundamental data from Alpha Vantage API
-    Uses 2 API calls per stock:
-    1. Income Statement (quarterly)
-    2. Balance Sheet (quarterly) - for ROE
+    Uses 1 API call per stock (Income Statement only)
     
-    Returns: (income_data, balance_data, error)
+    Note: ROE is calculated from Yahoo Finance instead
+    
+    Returns: (income_data, error)
     """
     if not api_key or api_key.strip() == '':
-        return None, None, "Please provide a valid Alpha Vantage API key"
+        return None, "Please provide a valid Alpha Vantage API key"
     
     try:
         base_url = "https://www.alphavantage.co/query"
         
-        # Call 1: Income Statement
+        # Income Statement only (Balance Sheet not needed - using Yahoo for ROE)
         income_params = {
             "function": "INCOME_STATEMENT",
             "symbol": ticker,
@@ -111,7 +111,7 @@ def fetch_alpha_vantage_data(ticker, api_key):
         income_response = requests.get(base_url, params=income_params, timeout=15)
         
         if income_response.status_code != 200:
-            return None, None, f"Alpha Vantage API error: {income_response.status_code}"
+            return None, f"Alpha Vantage API error: {income_response.status_code}"
         
         income_json = income_response.json()
         
@@ -120,42 +120,30 @@ def fetch_alpha_vantage_data(ticker, api_key):
         
         # Check for errors
         if "Error Message" in income_json:
-            return None, None, f"Alpha Vantage error: {income_json['Error Message']}"
+            return None, f"Alpha Vantage error: {income_json['Error Message']}"
         elif "Note" in income_json:
-            return None, None, f"Alpha Vantage rate limit: {income_json['Note']}"
+            return None, f"Alpha Vantage rate limit: {income_json['Note']}"
         elif "Information" in income_json:
-            return None, None, f"Alpha Vantage info: {income_json['Information']}"
+            return None, f"Alpha Vantage info: {income_json['Information']}"
         elif "quarterlyReports" not in income_json:
             # Show what keys we actually got for debugging
             error_msg = f"No quarterly data. API returned: {list(income_json.keys())[:5]}"
-            return None, None, error_msg
+            return None, error_msg
         
         income_data = income_json["quarterlyReports"]
         
-        # Call 2: Balance Sheet (for ROE)
-        balance_params = {
-            "function": "BALANCE_SHEET",
-            "symbol": ticker,
-            "apikey": api_key
-        }
+        # No longer fetching Balance Sheet - using Yahoo Finance for ROE
         
-        balance_response = requests.get(base_url, params=balance_params, timeout=15)
-        balance_data = []
-        
-        if balance_response.status_code == 200:
-            balance_json = balance_response.json()
-            if "quarterlyReports" in balance_json:
-                balance_data = balance_json["quarterlyReports"]
-        
-        return income_data, balance_data, None
+        return income_data, None
         
     except Exception as e:
-        return None, None, f"Error fetching Alpha Vantage data: {str(e)}"
+        return None, f"Error fetching Alpha Vantage data: {str(e)}"
 
 
-def calculate_alpha_vantage_fundamentals(income_data, balance_data):
+def calculate_alpha_vantage_fundamentals(income_data, ticker):
     """
-    Calculate all 5 fundamental indicators from Alpha Vantage data
+    Calculate fundamental indicators from Alpha Vantage data
+    Note: ROE is fetched from Yahoo Finance separately
     
     Returns: (scores, details)
     """
@@ -164,7 +152,7 @@ def calculate_alpha_vantage_fundamentals(income_data, balance_data):
         'profit_margin': 0,
         'earnings': 0,
         'rule_of_40': 0,
-        'roe': 0
+        'roe': 0  # Will be calculated from Yahoo Finance
     }
     
     details = {}
@@ -289,41 +277,10 @@ def calculate_alpha_vantage_fundamentals(income_data, balance_data):
                 if rule_of_40 >= 40:
                     scores['rule_of_40'] = 1
     
-    # 5. ROE from balance sheet
-    if balance_data and len(balance_data) > 0:
-        roe_quarters = []
-        
-        # Match quarters from income and balance sheet
-        for i in range(min(4, len(balance_data))):
-            # Get net income for this quarter
-            if i < len(net_incomes):
-                ni = net_incomes[i]
-                
-                # Get equity (try different field names)
-                equity_data = (balance_data[i].get('totalShareholderEquity') or 
-                              balance_data[i].get('totalEquity') or
-                              balance_data[i].get('shareholderEquity'))
-                equity = int(equity_data) if equity_data and equity_data != 'None' else 0
-                
-                if equity != 0 and ni != 0:
-                    # Annualized ROE
-                    quarterly_roe = (ni * 4 / equity) * 100
-                    roe_quarters.append(quarterly_roe)
-                else:
-                    roe_quarters.append(None)
-            else:
-                roe_quarters.append(None)
-        
-        details['roe_quarters'] = roe_quarters
-        details['roe_source'] = 'Alpha Vantage'
-        
-        # Check latest quarter ROE
-        if roe_quarters and roe_quarters[0] is not None and roe_quarters[0] >= 17:
-            scores['roe'] = 1
-    else:
-        # No balance sheet data available
-        details['roe_quarters'] = [None, None, None, None]
-        details['roe_source'] = 'Not available from Alpha Vantage'
+    # 5. ROE - Get from Yahoo Finance instead (more reliable)
+    # Alpha Vantage free tier doesn't include Balance Sheet quarterly data
+    details['roe_source'] = 'Yahoo Finance (calculated separately)'
+    details['roe_quarters'] = [None, None, None, None]  # Placeholder
     
     return scores, details
 
@@ -684,7 +641,7 @@ with st.sidebar:
         "Alpha Vantage API Key",
         value=st.session_state.alpha_vantage_key,
         type="password",
-        help="Free tier: 25 calls/day = 12-13 stock analyses. Guaranteed 8+ quarters with full YoY data!"
+        help="Free tier: 25 calls/day = 25 stocks. Guaranteed 8+ quarters with full YoY data!"
     )
     
     # Save API key if changed
@@ -697,8 +654,8 @@ with st.sidebar:
     # Show data source status
     if av_key and av_key.strip() != '':
         st.success("✅ Using Alpha Vantage API")
-        st.caption("2 API calls per stock | 12-13 stocks/day")
-        st.caption("✓ Guaranteed 8+ quarters | ✓ Full YoY data")
+        st.caption("1 API call per stock | 25 stocks/day")
+        st.caption("✓ 4 indicators from AV | ✓ ROE from Yahoo")
         
         # Add usage tracking info
         with st.expander("📊 API Usage Tracking"):
@@ -710,8 +667,9 @@ with st.sidebar:
             
             **Daily Limit:**
             - Free tier: 25 calls/day
-            - Per stock: 2 calls (Income + Balance Sheet)
-            - Total stocks: 12-13 per day
+            - Per stock: 1 call (Income Statement only)
+            - Total stocks: 25 per day
+            - ROE from Yahoo Finance (free, unlimited)
             
             **Current session:** If you see "rate limit exceeded" error, you've hit your limit for today.
             """)
@@ -736,13 +694,13 @@ if analyze_button or ticker:
         use_av = False
         if av_key and av_key.strip() != '':
             with st.spinner('📡 Fetching from Alpha Vantage API...'):
-                av_income, av_balance, av_error = fetch_alpha_vantage_data(ticker, av_key)
+                av_income, av_error = fetch_alpha_vantage_data(ticker, av_key)
             
             if not av_error and av_income:
                 use_av = True
-                # Increment call counter (2 calls: income + balance)
-                st.session_state.av_calls_today += 2
-                st.success(f"✅ Alpha Vantage: {len(av_income)} quarters | Session: {st.session_state.av_calls_today}/25 calls ({st.session_state.av_calls_today//2}/12 stocks)")
+                # Increment call counter (only 1 call now: income statement)
+                st.session_state.av_calls_today += 1
+                st.success(f"✅ Alpha Vantage: {len(av_income)} quarters | Session: {st.session_state.av_calls_today}/25 calls ({st.session_state.av_calls_today} stocks)")
             else:
                 st.warning(f"⚠️ Alpha Vantage failed: {av_error}. Using Yahoo Finance fallback...")
                 use_av = False
@@ -986,9 +944,32 @@ if analyze_button or ticker:
         
         # Calculate scores based on data source
         if use_av:
-            st.info("📊 Using Alpha Vantage data (guaranteed full YoY for all quarters)")
-            fund_scores, fund_details = calculate_alpha_vantage_fundamentals(av_income, av_balance)
+            st.info("📊 Using Alpha Vantage for 4 indicators (Sales, Earnings, Margins, Rule of 40)")
+            fund_scores, fund_details = calculate_alpha_vantage_fundamentals(av_income, ticker)
             fund_error = None
+            
+            # Get ROE from Yahoo Finance
+            st.caption("📊 Getting ROE from Yahoo Finance...")
+            try:
+                import yfinance as yf
+                yahoo_stock = yf.Ticker(ticker)
+                yahoo_info = yahoo_stock.info
+                
+                roe_ttm = yahoo_info.get('returnOnEquity')
+                if roe_ttm is not None:
+                    roe_pct = roe_ttm * 100 if roe_ttm < 1 else roe_ttm
+                    fund_details['roe'] = roe_pct
+                    fund_details['roe_source'] = 'Yahoo Finance (TTM)'
+                    
+                    if roe_pct >= 17:
+                        fund_scores['roe'] = 1
+                else:
+                    fund_details['roe'] = None
+                    fund_details['roe_source'] = 'Not available'
+            except:
+                fund_details['roe'] = None
+                fund_details['roe_source'] = 'Error fetching from Yahoo'
+                
         else:
             if fund_error:
                 st.error(fund_error)
