@@ -70,14 +70,19 @@ def save_user_inputs(inputs):
         pass
 
 # Initialize session state
+saved_inputs = load_user_inputs()  # Load once at the start
+
 if 'market_pulse' not in st.session_state:
-    saved_inputs = load_user_inputs()
     st.session_state.market_pulse = saved_inputs.get('market_pulse', 'Green - Acceleration')
 if 'alpha_vantage_key' not in st.session_state:
     # Pre-filled with user's API key
     st.session_state.alpha_vantage_key = saved_inputs.get('alpha_vantage_key', '0Y0YAGE5H1Y7OLLU')
 if 'av_calls_today' not in st.session_state:
     st.session_state.av_calls_today = 0
+if 'top_rated_group' not in st.session_state:
+    st.session_state.top_rated_group = saved_inputs.get('top_rated_group', False)
+if 'new_development' not in st.session_state:
+    st.session_state.new_development = saved_inputs.get('new_development', False)
 
 # ==================== ALPHA VANTAGE API FUNCTIONS (v3.0) ====================
 
@@ -294,8 +299,10 @@ def calculate_alpha_vantage_fundamentals(income_data, balance_data):
             if i < len(net_incomes):
                 ni = net_incomes[i]
                 
-                # Get equity
-                equity_data = balance_data[i].get('totalShareholderEquity')
+                # Get equity (try different field names)
+                equity_data = (balance_data[i].get('totalShareholderEquity') or 
+                              balance_data[i].get('totalEquity') or
+                              balance_data[i].get('shareholderEquity'))
                 equity = int(equity_data) if equity_data and equity_data != 'None' else 0
                 
                 if equity != 0 and ni != 0:
@@ -308,10 +315,15 @@ def calculate_alpha_vantage_fundamentals(income_data, balance_data):
                 roe_quarters.append(None)
         
         details['roe_quarters'] = roe_quarters
+        details['roe_source'] = 'Alpha Vantage'
         
         # Check latest quarter ROE
         if roe_quarters and roe_quarters[0] is not None and roe_quarters[0] >= 17:
             scores['roe'] = 1
+    else:
+        # No balance sheet data available
+        details['roe_quarters'] = [None, None, None, None]
+        details['roe_source'] = 'Not available from Alpha Vantage'
     
     return scores, details
 
@@ -1205,21 +1217,55 @@ if analyze_button or ticker:
             if 'roe_quarters' in fund_details:
                 roe_data = fund_details['roe_quarters']
                 quarter_dates = fund_details.get('quarter_dates', [])
+                roe_source = fund_details.get('roe_source', 'Unknown')
                 
-                st.write("**Return on Equity (Newest to Oldest):**")
-                for i, val in enumerate(roe_data):
-                    quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
-                    if val is not None:
-                        st.write(f"{quarter_label}: {val:.2f}%")
-                    else:
-                        st.write(f"{quarter_label}: N/A")
+                # Check if we have any ROE data
+                has_roe = any(val is not None for val in roe_data)
                 
-                if roe_data[0] is not None:
-                    latest_q = quarter_dates[0] if len(quarter_dates) > 0 else "Latest"
-                    if roe_data[0] >= 17:
-                        st.success(f"✅ Passed: {latest_q} ({roe_data[0]:.2f}%) ≥ 17%")
-                    else:
-                        st.warning(f"❌ Failed: {latest_q} ({roe_data[0]:.2f}%) < 17%")
+                if has_roe:
+                    st.write("**Return on Equity (Newest to Oldest):**")
+                    st.caption(f"Source: {roe_source}")
+                    
+                    for i, val in enumerate(roe_data):
+                        quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
+                        if val is not None:
+                            st.write(f"{quarter_label}: {val:.2f}%")
+                        else:
+                            st.write(f"{quarter_label}: N/A")
+                    
+                    if roe_data[0] is not None:
+                        latest_q = quarter_dates[0] if len(quarter_dates) > 0 else "Latest"
+                        if roe_data[0] >= 17:
+                            st.success(f"✅ Passed: {latest_q} ({roe_data[0]:.2f}%) ≥ 17%")
+                        else:
+                            st.warning(f"❌ Failed: {latest_q} ({roe_data[0]:.2f}%) < 17%")
+                else:
+                    # No quarterly ROE from Alpha Vantage - try Yahoo Finance TTM
+                    st.info(f"⚠️ {roe_source}")
+                    st.write("Attempting Yahoo Finance fallback...")
+                    
+                    # Get ROE from Yahoo Finance info
+                    try:
+                        import yfinance as yf
+                        stock = yf.Ticker(ticker)
+                        info = stock.info
+                        
+                        roe_ttm = info.get('returnOnEquity')
+                        if roe_ttm is not None:
+                            roe_pct = roe_ttm * 100 if roe_ttm < 1 else roe_ttm
+                            st.write(f"**ROE (TTM from Yahoo Finance): {roe_pct:.2f}%**")
+                            
+                            if roe_pct >= 17:
+                                st.success(f"✅ Passed: {roe_pct:.2f}% ≥ 17%")
+                                # Update score
+                                fund_scores['roe'] = 1
+                            else:
+                                st.warning(f"❌ Failed: {roe_pct:.2f}% < 17%")
+                        else:
+                            st.write("❌ ROE data not available from any source")
+                    except:
+                        st.write("❌ ROE data not available from any source")
+                        
             elif 'roe' in fund_details:
                 roe_val = fund_details['roe']
                 st.write(f"**ROE (TTM): {roe_val:.2f}%**")
@@ -1246,12 +1292,6 @@ if analyze_button or ticker:
         st.caption("Manual assessment based on qualitative factors")
         
         remarks_scores = {}
-        
-        # Initialize session state for remarks
-        if 'top_rated_group' not in st.session_state:
-            st.session_state.top_rated_group = False
-        if 'new_development' not in st.session_state:
-            st.session_state.new_development = False
         
         # 1. Top-Rated Stocks in Group / Top Industry Group Rank
         st.subheader("1️⃣ Among Top-Rated Stocks in Group or Top Industry Group Rank")
@@ -1284,11 +1324,19 @@ if analyze_button or ticker:
             if top_rated == "Yes":
                 st.success("✅ Top-rated stock or industry group")
                 remarks_scores['top_rated_group'] = 1
-                st.session_state.top_rated_group = True
+                if not st.session_state.top_rated_group:  # Changed
+                    st.session_state.top_rated_group = True
+                    saved_inputs = load_user_inputs()
+                    saved_inputs['top_rated_group'] = True
+                    save_user_inputs(saved_inputs)
             else:
                 st.warning("❌ Not top-rated")
                 remarks_scores['top_rated_group'] = 0
-                st.session_state.top_rated_group = False
+                if st.session_state.top_rated_group:  # Changed
+                    st.session_state.top_rated_group = False
+                    saved_inputs = load_user_inputs()
+                    saved_inputs['top_rated_group'] = False
+                    save_user_inputs(saved_inputs)
         
         with col2:
             emoji = "🟢" if remarks_scores['top_rated_group'] == 1 else "🔴"
@@ -1339,11 +1387,19 @@ if analyze_button or ticker:
             if new_dev == "Yes":
                 st.success("✅ Has new development catalyst")
                 remarks_scores['new_development'] = 1
-                st.session_state.new_development = True
+                if not st.session_state.new_development:  # Changed
+                    st.session_state.new_development = True
+                    saved_inputs = load_user_inputs()
+                    saved_inputs['new_development'] = True
+                    save_user_inputs(saved_inputs)
             else:
                 st.warning("❌ No significant new development")
                 remarks_scores['new_development'] = 0
-                st.session_state.new_development = False
+                if st.session_state.new_development:  # Changed
+                    st.session_state.new_development = False
+                    saved_inputs = load_user_inputs()
+                    saved_inputs['new_development'] = False
+                    save_user_inputs(saved_inputs)
         
         with col2:
             emoji = "🟢" if remarks_scores['new_development'] == 1 else "🔴"
