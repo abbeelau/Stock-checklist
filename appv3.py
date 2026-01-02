@@ -1100,10 +1100,10 @@ if analyze_button or ticker:
                         pass
                 
                 # Show first 4 quarters
-                st.write("**Last 4 Quarters (Newest to Oldest):**")
+                st.write("**Last 8 Quarters (Newest to Oldest):**")
                 st.caption(f"Source: {data_source}")
                 
-                for i in range(min(len(revenue_data), 4)):
+                for i in range(min(len(revenue_data), 8)):
                     quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
                     revenue_str = f"${revenue_data[i]:,.0f}"
                     
@@ -1112,18 +1112,6 @@ if analyze_button or ticker:
                         st.write(f"{quarter_label}: {revenue_str} **(YoY: {growth_data[i]:+.2f}%)**")
                     else:
                         st.write(f"{quarter_label}: {revenue_str} (YoY: N/A)")
-                
-                # Collapsible section for quarters 5-8
-                if len(revenue_data) >= 8:
-                    with st.expander(f"📊 Show Quarters 5-8 (for reference)"):
-                        for i in range(4, min(len(revenue_data), 8)):
-                            quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
-                            revenue_str = f"${revenue_data[i]:,.0f}"
-                            
-                            if i < len(growth_data) and growth_data[i] is not None:
-                                st.write(f"{quarter_label}: {revenue_str} **(YoY: {growth_data[i]:+.2f}%)**")
-                            else:
-                                st.write(f"{quarter_label}: {revenue_str}")
                 
                 # Info message if not all YoY data available
                 if yoy_available < 4:
@@ -1192,26 +1180,16 @@ if analyze_button or ticker:
                     except:
                         pass
                 
-                st.write("**Last 4 Quarters Margin % (Newest to Oldest):**")
+                st.write("**Last 8 Quarters Margin % (Newest to Oldest):**")
                 st.caption(f"Source: {data_source}")
                 
-                # Display first 4 quarters
-                for i in range(min(len(margin_data), 4)):
+                # Display all 8 quarters
+                for i in range(min(len(margin_data), 8)):
                     quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
                     if i < len(margin_data) and margin_data[i] is not None:
                         st.write(f"{quarter_label}: {margin_data[i]:.2f}%")
                     else:
                         st.write(f"{quarter_label}: N/A")
-                
-                # Collapsible section for quarters 5-8
-                if len(margin_data) >= 8:
-                    with st.expander(f"📊 Show Quarters 5-8 (for reference)"):
-                        for i in range(4, min(len(margin_data), 8)):
-                            quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
-                            if margin_data[i] is not None:
-                                st.write(f"{quarter_label}: {margin_data[i]:.2f}%")
-                            else:
-                                st.write(f"{quarter_label}: N/A")
                 
                 if len(margin_data) >= 2 and margin_data[0] is not None and margin_data[1] is not None:
                     latest_q = quarter_dates[0] if len(quarter_dates) > 0 else "Latest"
@@ -1278,11 +1256,11 @@ if analyze_button or ticker:
                     except:
                         pass
                 
-                st.write("**Last 4 Quarters (Newest to Oldest):**")
+                st.write("**Last 8 Quarters (Newest to Oldest):**")
                 st.caption(f"Source: {data_source}")
                 
-                # Display first 4 quarters
-                for i in range(min(len(earnings_data), 4)):
+                # Display all 8 quarters
+                for i in range(min(len(earnings_data), 8)):
                     quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
                     earnings_str = f"${earnings_data[i]:,.0f}"
                     
@@ -1290,18 +1268,6 @@ if analyze_button or ticker:
                         st.write(f"{quarter_label}: {earnings_str} **(YoY: {growth_data[i]:+.2f}%)**")
                     else:
                         st.write(f"{quarter_label}: {earnings_str} (YoY: N/A)")
-                
-                # Collapsible section for quarters 5-8
-                if len(earnings_data) >= 8:
-                    with st.expander(f"📊 Show Quarters 5-8 (for reference)"):
-                        for i in range(4, min(len(earnings_data), 8)):
-                            quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
-                            earnings_str = f"${earnings_data[i]:,.0f}"
-                            
-                            if i < len(growth_data) and growth_data[i] is not None:
-                                st.write(f"{quarter_label}: {earnings_str} **(YoY: {growth_data[i]:+.2f}%)**")
-                            else:
-                                st.write(f"{quarter_label}: {earnings_str}")
                 
                 # Info message if not all YoY data available
                 if yoy_available < 4:
