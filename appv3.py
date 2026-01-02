@@ -1099,11 +1099,13 @@ if analyze_button or ticker:
                     except:
                         pass
                 
-                # Show first 4 quarters
-                st.write("**Last 8 Quarters (Newest to Oldest):**")
-                st.caption(f"Source: {data_source}")
+                # Show quarters (up to 8 if available)
+                quarters_to_show = min(len(revenue_data), 8)
+                st.write(f"**Last {quarters_to_show} Quarters (Newest to Oldest):**")
+                st.caption(f"Source: {data_source} | Available: {len(revenue_data)} quarters")
+                st.caption(f"DEBUG: revenue_data length={len(revenue_data)}, growth_data length={len(growth_data)}, quarter_dates length={len(quarter_dates)}")
                 
-                for i in range(min(len(revenue_data), 8)):
+                for i in range(quarters_to_show):
                     quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
                     revenue_str = f"${revenue_data[i]:,.0f}"
                     
@@ -1180,11 +1182,12 @@ if analyze_button or ticker:
                     except:
                         pass
                 
-                st.write("**Last 8 Quarters Margin % (Newest to Oldest):**")
-                st.caption(f"Source: {data_source}")
+                quarters_to_show = min(len(margin_data), 8)
+                st.write(f"**Last {quarters_to_show} Quarters Margin % (Newest to Oldest):**")
+                st.caption(f"Source: {data_source} | Available: {len(margin_data)} quarters")
                 
-                # Display all 8 quarters
-                for i in range(min(len(margin_data), 8)):
+                # Display all available quarters
+                for i in range(quarters_to_show):
                     quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
                     if i < len(margin_data) and margin_data[i] is not None:
                         st.write(f"{quarter_label}: {margin_data[i]:.2f}%")
@@ -1256,11 +1259,12 @@ if analyze_button or ticker:
                     except:
                         pass
                 
-                st.write("**Last 8 Quarters (Newest to Oldest):**")
-                st.caption(f"Source: {data_source}")
+                quarters_to_show = min(len(earnings_data), 8)
+                st.write(f"**Last {quarters_to_show} Quarters (Newest to Oldest):**")
+                st.caption(f"Source: {data_source} | Available: {len(earnings_data)} quarters")
                 
-                # Display all 8 quarters
-                for i in range(min(len(earnings_data), 8)):
+                # Display all available quarters
+                for i in range(quarters_to_show):
                     quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
                     earnings_str = f"${earnings_data[i]:,.0f}"
                     
