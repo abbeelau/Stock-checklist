@@ -1073,8 +1073,8 @@ if analyze_button or ticker:
                 # Count how many YoY values we have
                 yoy_available = sum(1 for g in growth_data[:4] if g is not None)
                 
-                # Check if we need Yahoo fallback
-                if use_av and yoy_available < 4:
+                # Check if we need Yahoo fallback (only if AV has very poor data: 0-1 quarters)
+                if use_av and yoy_available <= 1:
                     st.warning(f"⚠️ Alpha Vantage: Only {yoy_available}/4 quarters have YoY. Fetching Yahoo Finance fallback...")
                     
                     # Fetch Yahoo Finance data as fallback
@@ -1096,8 +1096,12 @@ if analyze_button or ticker:
                                 fund_scores['sales_growth'] = yahoo_scores.get('sales_growth', 0)
                                 yoy_available = yahoo_yoy_count
                                 data_source = 'Yahoo Finance (fallback)'
+                            else:
+                                st.info(f"ℹ️ Alpha Vantage has {yoy_available}/4 YoY quarters - keeping AV data with {len(revenue_data)} quarters total")
                     except:
                         pass
+                elif use_av and yoy_available < 4:
+                    st.info(f"ℹ️ Alpha Vantage has {yoy_available}/4 YoY quarters - acceptable, showing {len(revenue_data)} quarters total")
                 
                 # Show quarters (up to 8 if available)
                 quarters_to_show = min(len(revenue_data), 8)
@@ -1160,8 +1164,8 @@ if analyze_button or ticker:
                 # Count how many margin values we have
                 margin_available = sum(1 for m in margin_data[:4] if m is not None)
                 
-                # Check if we need Yahoo fallback
-                if use_av and margin_available < 4:
+                # Check if we need Yahoo fallback (only if AV has very poor data: 0-1 quarters)
+                if use_av and margin_available <= 1:
                     st.warning(f"⚠️ Alpha Vantage: Only {margin_available}/4 quarters have margin data. Fetching Yahoo Finance fallback...")
                     
                     try:
@@ -1179,8 +1183,12 @@ if analyze_button or ticker:
                                 fund_scores['profit_margin'] = yahoo_scores.get('profit_margin', 0)
                                 margin_available = yahoo_margin_count
                                 data_source = 'Yahoo Finance (fallback)'
+                            else:
+                                st.info(f"ℹ️ Alpha Vantage has {margin_available}/4 margin quarters - keeping AV data with {len(margin_data)} quarters total")
                     except:
                         pass
+                elif use_av and margin_available < 4:
+                    st.info(f"ℹ️ Alpha Vantage has {margin_available}/4 margin quarters - acceptable, showing {len(margin_data)} quarters total")
                 
                 quarters_to_show = min(len(margin_data), 8)
                 st.write(f"**Last {quarters_to_show} Quarters Margin % (Newest to Oldest):**")
@@ -1236,8 +1244,8 @@ if analyze_button or ticker:
                 # Count how many YoY values we have
                 yoy_available = sum(1 for g in growth_data[:4] if g is not None)
                 
-                # Check if we need Yahoo fallback
-                if use_av and yoy_available < 4:
+                # Check if we need Yahoo fallback (only if AV has very poor data: 0-1 quarters)
+                if use_av and yoy_available <= 1:
                     st.warning(f"⚠️ Alpha Vantage: Only {yoy_available}/4 quarters have YoY. Fetching Yahoo Finance fallback...")
                     
                     try:
@@ -1256,8 +1264,12 @@ if analyze_button or ticker:
                                 fund_scores['earnings'] = yahoo_scores.get('earnings', 0)
                                 yoy_available = yahoo_yoy_count
                                 data_source = 'Yahoo Finance (fallback)'
+                            else:
+                                st.info(f"ℹ️ Alpha Vantage has {yoy_available}/4 YoY quarters - keeping AV data with {len(earnings_data)} quarters total")
                     except:
                         pass
+                elif use_av and yoy_available < 4:
+                    st.info(f"ℹ️ Alpha Vantage has {yoy_available}/4 YoY quarters - acceptable, showing {len(earnings_data)} quarters total")
                 
                 quarters_to_show = min(len(earnings_data), 8)
                 st.write(f"**Last {quarters_to_show} Quarters (Newest to Oldest):**")
