@@ -160,9 +160,9 @@ def calculate_alpha_vantage_fundamentals(income_data, ticker):
     if not income_data or len(income_data) < 4:
         return scores, details
     
-    # Get quarter dates (first 4 quarters)
+    # Get quarter dates (first 8 quarters)
     quarter_dates = []
-    for q in income_data[:4]:
+    for q in income_data[:8]:
         date_str = q.get('fiscalDateEnding', '')
         try:
             date_obj = datetime.strptime(date_str, '%Y-%m-%d')
@@ -173,13 +173,16 @@ def calculate_alpha_vantage_fundamentals(income_data, ticker):
     details['quarter_dates'] = quarter_dates
     details['revenue_quarters_available'] = len(income_data)
     details['earnings_quarters_available'] = len(income_data)
+    details['sales_source'] = 'Alpha Vantage'
+    details['earnings_source'] = 'Alpha Vantage'
+    details['margin_source'] = 'Alpha Vantage'
     
-    # Extract basic data (first 4 quarters)
+    # Extract basic data (first 8 quarters for display, but calculate YoY for first 4)
     revenues = []
     net_incomes = []
     operating_incomes = []
     
-    for q in income_data[:4]:
+    for q in income_data[:8]:  # Get 8 quarters for display
         # Revenue
         rev = q.get('totalRevenue')
         revenues.append(int(rev) if rev and rev != 'None' else 0)
@@ -195,8 +198,27 @@ def calculate_alpha_vantage_fundamentals(income_data, ticker):
     details['sales'] = revenues
     details['earnings'] = net_incomes
     
-    # 1. Sales Growth Acceleration (YoY)
-    if len(income_data) >= 8:
+    # 1. Sales Growth Acceleration (YoY) - Calculate for 8 quarters
+    if len(income_data) >= 12:  # Need 12 to calculate YoY for 8 quarters
+        sales_growth = []
+        for i in range(8):
+            current_rev = revenues[i] if i < len(revenues) else 0
+            year_ago_rev_data = income_data[i + 4].get('totalRevenue')
+            year_ago_rev = int(year_ago_rev_data) if year_ago_rev_data and year_ago_rev_data != 'None' else 0
+            
+            if year_ago_rev != 0 and current_rev != 0:
+                yoy = ((current_rev - year_ago_rev) / abs(year_ago_rev)) * 100
+                sales_growth.append(yoy)
+            else:
+                sales_growth.append(None)
+        
+        details['sales_growth'] = sales_growth
+        
+        # Check acceleration (first 2 quarters)
+        if sales_growth[0] is not None and sales_growth[1] is not None:
+            if sales_growth[0] > sales_growth[1]:
+                scores['sales_growth'] = 1
+    elif len(income_data) >= 8:  # Fallback: calculate only for first 4 quarters
         sales_growth = []
         for i in range(4):
             current_rev = revenues[i]
@@ -218,10 +240,10 @@ def calculate_alpha_vantage_fundamentals(income_data, ticker):
     else:
         details['sales_growth'] = [None, None, None, None]
     
-    # 2. Profit Margin Acceleration
+    # 2. Profit Margin Acceleration - Calculate for 8 quarters
     margin_values = []
-    for i in range(min(4, len(operating_incomes))):
-        if revenues[i] != 0 and operating_incomes[i] != 0:
+    for i in range(min(8, len(operating_incomes))):
+        if i < len(revenues) and revenues[i] != 0 and operating_incomes[i] != 0:
             margin = (operating_incomes[i] / revenues[i]) * 100
             margin_values.append(margin)
         else:
@@ -233,8 +255,27 @@ def calculate_alpha_vantage_fundamentals(income_data, ticker):
         if margin_values[0] > margin_values[1]:
             scores['profit_margin'] = 1
     
-    # 3. Earnings Growth Acceleration (YoY)
-    if len(income_data) >= 8:
+    # 3. Earnings Growth Acceleration (YoY) - Calculate for 8 quarters
+    if len(income_data) >= 12:  # Need 12 to calculate YoY for 8 quarters
+        earnings_growth = []
+        for i in range(8):
+            current_ni = net_incomes[i] if i < len(net_incomes) else 0
+            year_ago_ni_data = income_data[i + 4].get('netIncome')
+            year_ago_ni = int(year_ago_ni_data) if year_ago_ni_data and year_ago_ni_data != 'None' else 0
+            
+            if year_ago_ni != 0 and current_ni != 0:
+                yoy = ((current_ni - year_ago_ni) / abs(year_ago_ni)) * 100
+                earnings_growth.append(yoy)
+            else:
+                earnings_growth.append(None)
+        
+        details['earnings_growth'] = earnings_growth
+        
+        # Check acceleration
+        if earnings_growth[0] is not None and earnings_growth[1] is not None:
+            if earnings_growth[0] > earnings_growth[1]:
+                scores['earnings'] = 1
+    elif len(income_data) >= 8:  # Fallback: calculate only for first 4 quarters
         earnings_growth = []
         for i in range(4):
             current_ni = net_incomes[i]
@@ -1027,13 +1068,41 @@ if analyze_button or ticker:
                 growth_data = fund_details['sales_growth']
                 quarter_dates = fund_details.get('quarter_dates', [])
                 quarters_available = fund_details.get('revenue_quarters_available', 0)
-                
-                st.write("**Last 4 Quarters (Newest to Oldest):**")
+                data_source = fund_details.get('sales_source', 'Unknown')
                 
                 # Count how many YoY values we have
-                yoy_available = sum(1 for g in growth_data if g is not None)
+                yoy_available = sum(1 for g in growth_data[:4] if g is not None)
                 
-                # Display all quarters with their YoY growth
+                # Check if we need Yahoo fallback
+                if use_av and yoy_available < 4:
+                    st.warning(f"⚠️ Alpha Vantage: Only {yoy_available}/4 quarters have YoY. Fetching Yahoo Finance fallback...")
+                    
+                    # Fetch Yahoo Finance data as fallback
+                    try:
+                        yahoo_fund_data, yahoo_error = fetch_fundamental_data(ticker)
+                        if not yahoo_error:
+                            yahoo_scores, yahoo_details = calculate_fundamental_scores(yahoo_fund_data)
+                            
+                            # Use Yahoo data if it has more YoY data
+                            yahoo_yoy = yahoo_details.get('sales_growth', [])
+                            yahoo_yoy_count = sum(1 for g in yahoo_yoy[:4] if g is not None)
+                            
+                            if yahoo_yoy_count > yoy_available:
+                                st.success(f"✅ Yahoo Finance has {yahoo_yoy_count}/4 quarters. Using Yahoo data.")
+                                revenue_data = yahoo_details.get('sales', revenue_data)
+                                growth_data = yahoo_details.get('sales_growth', growth_data)
+                                quarter_dates = yahoo_details.get('quarter_dates', quarter_dates)
+                                quarters_available = yahoo_details.get('revenue_quarters_available', quarters_available)
+                                fund_scores['sales_growth'] = yahoo_scores.get('sales_growth', 0)
+                                yoy_available = yahoo_yoy_count
+                                data_source = 'Yahoo Finance (fallback)'
+                    except:
+                        pass
+                
+                # Show first 4 quarters
+                st.write("**Last 4 Quarters (Newest to Oldest):**")
+                st.caption(f"Source: {data_source}")
+                
                 for i in range(min(len(revenue_data), 4)):
                     quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
                     revenue_str = f"${revenue_data[i]:,.0f}"
@@ -1044,9 +1113,21 @@ if analyze_button or ticker:
                     else:
                         st.write(f"{quarter_label}: {revenue_str} (YoY: N/A)")
                 
+                # Collapsible section for quarters 5-8
+                if len(revenue_data) >= 8:
+                    with st.expander(f"📊 Show Quarters 5-8 (for reference)"):
+                        for i in range(4, min(len(revenue_data), 8)):
+                            quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
+                            revenue_str = f"${revenue_data[i]:,.0f}"
+                            
+                            if i < len(growth_data) and growth_data[i] is not None:
+                                st.write(f"{quarter_label}: {revenue_str} **(YoY: {growth_data[i]:+.2f}%)**")
+                            else:
+                                st.write(f"{quarter_label}: {revenue_str}")
+                
                 # Info message if not all YoY data available
                 if yoy_available < 4:
-                    st.info(f"ℹ️ Only {yoy_available} of 4 quarters have YoY data ({quarters_available} quarters available from Yahoo Finance, need 8 for full YoY)")
+                    st.info(f"ℹ️ Only {yoy_available} of 4 quarters have YoY data")
                 
                 # Show acceleration comparison if we have at least 2 YoY values
                 if len(growth_data) >= 2 and growth_data[0] is not None and growth_data[1] is not None:
@@ -1084,14 +1165,53 @@ if analyze_button or ticker:
             if 'margin' in fund_details:
                 margin_data = fund_details['margin']
                 quarter_dates = fund_details.get('quarter_dates', [])
+                data_source = fund_details.get('margin_source', 'Unknown')
+                
+                # Count how many margin values we have
+                margin_available = sum(1 for m in margin_data[:4] if m is not None)
+                
+                # Check if we need Yahoo fallback
+                if use_av and margin_available < 4:
+                    st.warning(f"⚠️ Alpha Vantage: Only {margin_available}/4 quarters have margin data. Fetching Yahoo Finance fallback...")
+                    
+                    try:
+                        yahoo_fund_data, yahoo_error = fetch_fundamental_data(ticker)
+                        if not yahoo_error:
+                            yahoo_scores, yahoo_details = calculate_fundamental_scores(yahoo_fund_data)
+                            
+                            yahoo_margin = yahoo_details.get('margin', [])
+                            yahoo_margin_count = sum(1 for m in yahoo_margin[:4] if m is not None)
+                            
+                            if yahoo_margin_count > margin_available:
+                                st.success(f"✅ Yahoo Finance has {yahoo_margin_count}/4 quarters. Using Yahoo data.")
+                                margin_data = yahoo_details.get('margin', margin_data)
+                                quarter_dates = yahoo_details.get('quarter_dates', quarter_dates)
+                                fund_scores['profit_margin'] = yahoo_scores.get('profit_margin', 0)
+                                margin_available = yahoo_margin_count
+                                data_source = 'Yahoo Finance (fallback)'
+                    except:
+                        pass
                 
                 st.write("**Last 4 Quarters Margin % (Newest to Oldest):**")
-                for i, val in enumerate(margin_data):
+                st.caption(f"Source: {data_source}")
+                
+                # Display first 4 quarters
+                for i in range(min(len(margin_data), 4)):
                     quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
-                    if val is not None:
-                        st.write(f"{quarter_label}: {val:.2f}%")
+                    if i < len(margin_data) and margin_data[i] is not None:
+                        st.write(f"{quarter_label}: {margin_data[i]:.2f}%")
                     else:
                         st.write(f"{quarter_label}: N/A")
+                
+                # Collapsible section for quarters 5-8
+                if len(margin_data) >= 8:
+                    with st.expander(f"📊 Show Quarters 5-8 (for reference)"):
+                        for i in range(4, min(len(margin_data), 8)):
+                            quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
+                            if margin_data[i] is not None:
+                                st.write(f"{quarter_label}: {margin_data[i]:.2f}%")
+                            else:
+                                st.write(f"{quarter_label}: N/A")
                 
                 if len(margin_data) >= 2 and margin_data[0] is not None and margin_data[1] is not None:
                     latest_q = quarter_dates[0] if len(quarter_dates) > 0 else "Latest"
@@ -1130,26 +1250,62 @@ if analyze_button or ticker:
                 growth_data = fund_details['earnings_growth']
                 quarter_dates = fund_details.get('quarter_dates', [])
                 quarters_available = fund_details.get('earnings_quarters_available', 0)
-                
-                st.write("**Last 4 Quarters (Newest to Oldest):**")
+                data_source = fund_details.get('earnings_source', 'Unknown')
                 
                 # Count how many YoY values we have
-                yoy_available = sum(1 for g in growth_data if g is not None)
+                yoy_available = sum(1 for g in growth_data[:4] if g is not None)
                 
-                # Display all quarters with their YoY growth
+                # Check if we need Yahoo fallback
+                if use_av and yoy_available < 4:
+                    st.warning(f"⚠️ Alpha Vantage: Only {yoy_available}/4 quarters have YoY. Fetching Yahoo Finance fallback...")
+                    
+                    try:
+                        yahoo_fund_data, yahoo_error = fetch_fundamental_data(ticker)
+                        if not yahoo_error:
+                            yahoo_scores, yahoo_details = calculate_fundamental_scores(yahoo_fund_data)
+                            
+                            yahoo_yoy = yahoo_details.get('earnings_growth', [])
+                            yahoo_yoy_count = sum(1 for g in yahoo_yoy[:4] if g is not None)
+                            
+                            if yahoo_yoy_count > yoy_available:
+                                st.success(f"✅ Yahoo Finance has {yahoo_yoy_count}/4 quarters. Using Yahoo data.")
+                                earnings_data = yahoo_details.get('earnings', earnings_data)
+                                growth_data = yahoo_details.get('earnings_growth', growth_data)
+                                quarter_dates = yahoo_details.get('quarter_dates', quarter_dates)
+                                fund_scores['earnings'] = yahoo_scores.get('earnings', 0)
+                                yoy_available = yahoo_yoy_count
+                                data_source = 'Yahoo Finance (fallback)'
+                    except:
+                        pass
+                
+                st.write("**Last 4 Quarters (Newest to Oldest):**")
+                st.caption(f"Source: {data_source}")
+                
+                # Display first 4 quarters
                 for i in range(min(len(earnings_data), 4)):
                     quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
                     earnings_str = f"${earnings_data[i]:,.0f}"
                     
-                    # Show YoY growth if available
                     if i < len(growth_data) and growth_data[i] is not None:
                         st.write(f"{quarter_label}: {earnings_str} **(YoY: {growth_data[i]:+.2f}%)**")
                     else:
                         st.write(f"{quarter_label}: {earnings_str} (YoY: N/A)")
                 
+                # Collapsible section for quarters 5-8
+                if len(earnings_data) >= 8:
+                    with st.expander(f"📊 Show Quarters 5-8 (for reference)"):
+                        for i in range(4, min(len(earnings_data), 8)):
+                            quarter_label = quarter_dates[i] if i < len(quarter_dates) else f"Q{i+1}"
+                            earnings_str = f"${earnings_data[i]:,.0f}"
+                            
+                            if i < len(growth_data) and growth_data[i] is not None:
+                                st.write(f"{quarter_label}: {earnings_str} **(YoY: {growth_data[i]:+.2f}%)**")
+                            else:
+                                st.write(f"{quarter_label}: {earnings_str}")
+                
                 # Info message if not all YoY data available
                 if yoy_available < 4:
-                    st.info(f"ℹ️ Only {yoy_available} of 4 quarters have YoY data ({quarters_available} quarters available from Yahoo Finance, need 8 for full YoY)")
+                    st.info(f"ℹ️ Only {yoy_available} of 4 quarters have YoY data")
                 
                 # Show acceleration comparison if we have at least 2 YoY values
                 if len(growth_data) >= 2 and growth_data[0] is not None and growth_data[1] is not None:
